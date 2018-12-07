@@ -46,6 +46,8 @@ namespace RabbitHoleSharp
         IntPtr handle = WinDivert.WinDivertMethods.WinDivertOpen("true", WINDIVERT_LAYER.WINDIVERT_LAYER_NETWORK, 0, 0);
         Random rand = new Random();
         MD5 md5Ctx = new MD5CryptoServiceProvider();
+        byte[] key = System.Text.Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"); //Must 32 bytes
+       
 
         Thread processThread;
         Thread txThread;
@@ -142,7 +144,9 @@ namespace RabbitHoleSharp
                     var TXProtocolPacket = new ProtocolPacket { PacketTimestamp = Timestamp, PacketTotal = PacketTotal, PacketMD5Sum = MD5Sum, PacketCount = PiecedMsg.Count,SrcIP=SrcIP.ToString(),DstIP=DstIP.ToString() };
                     TXProtocolPacket.PiecedMsg = PiecedMsg.Pop();
                     var udpPacket = new PacketDotNet.UdpPacket((ushort)rand.Next(1, 65536), (ushort)rand.Next(1, 65536));
-                    udpPacket.PayloadData = System.Text.Encoding.Default.GetBytes(JsonConvert.SerializeObject(TXProtocolPacket));
+                    long nonceTime = (DateTimeOffset.Now.ToUnixTimeSeconds() / 300) * 300;
+                    byte[] nonce = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();                    
+                    udpPacket.PayloadData = Sodium.StreamEncryption.EncryptChaCha20(JsonConvert.SerializeObject(TXProtocolPacket), nonce, key); ;
                     if (DstIP.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                     {
                         var ipv4Packet = new PacketDotNet.IPv4Packet(SrcIP, DstIP);
@@ -212,7 +216,10 @@ namespace RabbitHoleSharp
 
                 try
                 {
-                    ProtocolPacket RXProtocolPacket = JsonConvert.DeserializeObject<ProtocolPacket>(System.Text.Encoding.Default.GetString(ParsedPacket.PayloadData));
+                    long nonceTime = (DateTimeOffset.Now.ToUnixTimeSeconds() / 300) * 300;
+                    byte[] nonce = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();
+                    byte[] decryptedData =Sodium.StreamEncryption.DecryptChaCha20(ParsedPacket.PayloadData,nonce,key);
+                    ProtocolPacket RXProtocolPacket = JsonConvert.DeserializeObject<ProtocolPacket>(System.Text.Encoding.Default.GetString(decryptedData));
                     if (RXProtocolPacket.PacketMD5Sum == "") continue;
                     ProcessProtocolPacket(RXProtocolPacket);
                 }
@@ -286,6 +293,7 @@ namespace RabbitHoleSharp
                 var txPacket = txBuffer.Take();
                 if (!WinDivertMethods.WinDivertSend(handle, txPacket.Data, (uint)txPacket.Data.Length, ref txPacket.Addr, ref slen))
                 {
+                    continue;
                     Console.WriteLine("Send Failed");
                     Console.WriteLine(BitConverter.ToString(txPacket.Data).Replace("-", ""));
                 }
