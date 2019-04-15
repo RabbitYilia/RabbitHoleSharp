@@ -55,6 +55,7 @@ namespace RabbitHoleSharp
 
         public RabbitHole()
         {
+            key = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"));
             rxThread = new Thread(new ThreadStart(RXLoop));
             processThread = new Thread(new ThreadStart(ProcessLoop));
             txThread = new Thread(new ThreadStart(TXLoop));
