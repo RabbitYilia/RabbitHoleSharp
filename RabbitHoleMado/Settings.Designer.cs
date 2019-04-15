@@ -1,6 +1,6 @@
 ﻿namespace RabbitHoleMado
 {
-    partial class MainWindow
+    partial class Settings
     {
         /// <summary>
         /// 必需的设计器变量。
@@ -30,14 +30,14 @@
         {
             this.SuspendLayout();
             // 
-            // MainWindow
+            // Settings
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(920, 453);
-            this.Name = "MainWindow";
-            this.Text = "Form1";
-            this.Load += new System.EventHandler(this.MainWindow_Load);
+            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Name = "Settings";
+            this.Text = "Settings";
+            this.Load += new System.EventHandler(this.Settings_Load);
             this.ResumeLayout(false);
 
         }
@@ -45,4 +45,3 @@
         #endregion
     }
 }
-

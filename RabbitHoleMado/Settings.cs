@@ -10,18 +10,16 @@ using System.Windows.Forms;
 
 namespace RabbitHoleMado
 {
-    public partial class MainWindow : Form
+    public partial class Settings : Form
     {
-        public MainWindow()
+        public Settings()
         {
             InitializeComponent();
         }
 
-        private void MainWindow_Load(object sender, EventArgs e)
+        private void Settings_Load(object sender, EventArgs e)
         {
-            Settings SettingsWindow = new Settings();
-            SettingsWindow.Show();
-            this.Hide();
+
         }
     }
 }
