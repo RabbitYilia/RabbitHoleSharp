@@ -5,11 +5,11 @@ using System.Linq;
 using System.Text;
 using System.Net;
 using System.Threading;
-using System.Threading.Tasks;
 using WinDivert;
 using System.Security.Cryptography;
 using Newtonsoft.Json;
 using System.IO;
+using NSec.Cryptography;
 
 namespace RabbitHoleSharp
 {
@@ -43,10 +43,10 @@ namespace RabbitHoleSharp
 
         Dictionary<string, ProtocolPacket> ProtocolPacketPool=new Dictionary<string, ProtocolPacket>();
 
-        IntPtr handle = WinDivert.WinDivertMethods.WinDivertOpen("true", WINDIVERT_LAYER.WINDIVERT_LAYER_NETWORK, 0, 0);
+        IntPtr handle = WinDivertMethods.WinDivertOpen("true", WINDIVERT_LAYER.WINDIVERT_LAYER_NETWORK, 0, 0);
         Random rand = new Random();
-        MD5 md5Ctx = new MD5CryptoServiceProvider();
-        byte[] key = System.Text.Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"); //Must 32 bytes
+        SHA256 sha256Ctx = new SHA256CryptoServiceProvider();
+        byte[] key = Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"); //Must 32 bytes
        
 
         Thread processThread;
@@ -55,7 +55,7 @@ namespace RabbitHoleSharp
 
         public RabbitHole()
         {
-            key = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"));
+            key = sha256Ctx.ComputeHash(Encoding.Default.GetBytes("NetworkPasswordNetworkPassword12"));
             rxThread = new Thread(new ThreadStart(RXLoop));
             processThread = new Thread(new ThreadStart(ProcessLoop));
             txThread = new Thread(new ThreadStart(TXLoop));
@@ -93,7 +93,7 @@ namespace RabbitHoleSharp
                     break;
                 }
                 var Timestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-                var MD5Sum = BitConverter.ToString(md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(input+rand.Next(0,65536).ToString()))).Replace("-", "");
+                var MD5Sum = BitConverter.ToString(sha256Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(input+rand.Next(0,65536).ToString()))).Replace("-", "");
 
                 Stack<string> PiecedMsg = new Stack<string>();
                 while (input.Length > 0)
@@ -146,8 +146,10 @@ namespace RabbitHoleSharp
                     TXProtocolPacket.PiecedMsg = PiecedMsg.Pop();
                     var udpPacket = new PacketDotNet.UdpPacket((ushort)rand.Next(1, 65536), (ushort)rand.Next(1, 65536));
                     long nonceTime = (DateTimeOffset.Now.ToUnixTimeSeconds() / 300) * 300;
-                    byte[] nonce = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();                    
-                    udpPacket.PayloadData = Sodium.StreamEncryption.EncryptChaCha20(JsonConvert.SerializeObject(TXProtocolPacket), nonce, key); ;
+                    byte[] nonce = sha256Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();
+                    var NSecKey = Key.Import(AeadAlgorithm.ChaCha20Poly1305, key, KeyBlobFormat.RawSymmetricKey);
+                    var NSecNonce = new Nonce(nonce, 4);
+                    udpPacket.PayloadData = AeadAlgorithm.ChaCha20Poly1305.Encrypt(NSecKey, NSecNonce, null, Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(TXProtocolPacket)));
                     if (DstIP.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                     {
                         var ipv4Packet = new PacketDotNet.IPv4Packet(SrcIP, DstIP);
@@ -160,6 +162,7 @@ namespace RabbitHoleSharp
                     if (DstIP.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
                     {
                         var ipv6Packet = new PacketDotNet.IPv6Packet(SrcIP, DstIP);
+                        ipv6Packet.NextHeader = PacketDotNet.IPProtocolType.UDP;
                         ipv6Packet.PayloadPacket = udpPacket;
                         udpPacket.UpdateCalculatedValues();
                         udpPacket.UpdateUDPChecksum();
@@ -218,14 +221,25 @@ namespace RabbitHoleSharp
                 try
                 {
                     long nonceTime = (DateTimeOffset.Now.ToUnixTimeSeconds() / 300) * 300;
-                    byte[] nonce = md5Ctx.ComputeHash(System.Text.Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();
-                    byte[] decryptedData =Sodium.StreamEncryption.DecryptChaCha20(ParsedPacket.PayloadData,nonce,key);
+                    byte[] nonce = sha256Ctx.ComputeHash(Encoding.Default.GetBytes(nonceTime.ToString())).Take(8).ToArray();
+                    byte[] decryptedData;
+                    var NSecKey = Key.Import(AeadAlgorithm.ChaCha20Poly1305, key, KeyBlobFormat.RawSymmetricKey);
+                    var NSecNonce = new Nonce(nonce, 4);
+                    AeadAlgorithm.ChaCha20Poly1305.Decrypt(NSecKey, NSecNonce, null, ParsedPacket.PayloadData, out decryptedData);
+                    if (decryptedData == null)
+                    {
+                        // Data will be null when decrypt failed, this may mean the packet is not sended by this software.
+                        txBuffer.Add(packet);
+                        continue;
+                    }
                     ProtocolPacket RXProtocolPacket = JsonConvert.DeserializeObject<ProtocolPacket>(System.Text.Encoding.Default.GetString(decryptedData));
                     if (RXProtocolPacket.PacketMD5Sum == "") continue;
                     ProcessProtocolPacket(RXProtocolPacket);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    // This will not catch decrypt fail, but may catch other erros likes key format error.
+                    Console.WriteLine(ex);
                     txBuffer.Add(packet);
                 }
             }
