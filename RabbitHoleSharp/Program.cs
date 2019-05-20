@@ -21,7 +21,7 @@ namespace RabbitHoleSharp
 
             string hostName = Dns.GetHostName();
             var addressList = Dns.GetHostAddresses(hostName);
-            foreach (IPAddress ip in addressList)
+            foreach (IPAddress ip in addressList.Distinct().ToList())
             {
                 if (rb.AddSrcAddress(ip))
                 {

@@ -37,6 +37,7 @@ namespace RabbitHole
         Thread processThread;
         Thread txThread;
         Thread rxThread;
+        Thread SendThread;
         private class DivertPacket
         {
             public byte[] Data;
@@ -60,16 +61,17 @@ namespace RabbitHole
             processThread.Abort();
             txThread.Abort();
             rxThread.Abort();
+            SendThread.Abort();
             WinDivertMethods.WinDivertClose(handle);
         }
         ~RabbitHoleSrv()
         {
-            
+
         }
         public bool SetKey(string inputkey)
         {
             if (inputkey == "") return false;
-            key=sha256Ctx.ComputeHash(Encoding.Default.GetBytes(inputkey));
+            key = sha256Ctx.ComputeHash(Encoding.Default.GetBytes(inputkey));
             return true;
         }
         public bool AddSrcAddress(IPAddress SrcIP)
@@ -107,7 +109,7 @@ namespace RabbitHole
             return true;
         }
 
-        public void Send()
+        private void Send()
         {
             while (true)
             {
@@ -197,7 +199,7 @@ namespace RabbitHole
             }
         }
 
-        public void ProcessLoop()
+        private void ProcessLoop()
         {
             var FakeMACAddr = System.Net.NetworkInformation.PhysicalAddress.Parse("90-90-90-90-90-90");
             var Fakeethernetv4Packet = new PacketDotNet.EthernetPacket(FakeMACAddr, FakeMACAddr, PacketDotNet.EthernetPacketType.IPv4);
@@ -373,9 +375,11 @@ namespace RabbitHole
             rxThread = new Thread(new ThreadStart(RXLoop));
             processThread = new Thread(new ThreadStart(ProcessLoop));
             txThread = new Thread(new ThreadStart(TXLoop));
+            SendThread = new Thread(new ThreadStart(Send));
             processThread.Start();
             rxThread.Start();
             txThread.Start();
+            SendThread.Start();
             return true;
         }
 

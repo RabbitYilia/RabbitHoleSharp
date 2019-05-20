@@ -61,16 +61,17 @@ namespace RabbitHole
             processThread.Abort();
             txThread.Abort();
             rxThread.Abort();
+            SendThread.Abort();
             WinDivertMethods.WinDivertClose(handle);
         }
         ~RabbitHoleSrv()
         {
-            
+
         }
         public bool SetKey(string inputkey)
         {
             if (inputkey == "") return false;
-            key=sha256Ctx.ComputeHash(Encoding.Default.GetBytes(inputkey));
+            key = sha256Ctx.ComputeHash(Encoding.Default.GetBytes(inputkey));
             return true;
         }
         public bool AddSrcAddress(IPAddress SrcIP)
@@ -375,7 +376,7 @@ namespace RabbitHole
             processThread = new Thread(new ThreadStart(ProcessLoop));
             txThread = new Thread(new ThreadStart(TXLoop));
             SendThread = new Thread(new ThreadStart(Send));
-            processThread.Start();   
+            processThread.Start();
             rxThread.Start();
             txThread.Start();
             SendThread.Start();

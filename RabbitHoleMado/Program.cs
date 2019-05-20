@@ -8,7 +8,7 @@ namespace RabbitHoleMado
 {
     static class Program
     {
-        
+        public static RabbitHole.RabbitHoleSrv rb=new RabbitHole.RabbitHoleSrv();
         /// <summary>
         /// 应用程序的主入口点。
         /// </summary>
@@ -17,7 +17,7 @@ namespace RabbitHoleMado
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainWindow());
+            Application.Run(new ConfigWizard());
         }
     }
 }
